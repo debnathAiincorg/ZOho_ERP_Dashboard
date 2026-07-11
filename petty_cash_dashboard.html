@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Petty Cash — Activity Dashboard</title>
+<style>
+  :root {
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --credit:         #e34948;
+    --debit:          #008300;
+    --danger:         #e34948;
+    --card-shadow:    0 1px 2px rgba(11,11,11,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --credit:         #e66767;
+      --debit:          #008300;
+      --danger:         #e66767;
+      --card-shadow:    0 1px 3px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --credit:         #e66767;
+    --debit:          #008300;
+    --danger:         #e66767;
+    --card-shadow:    0 1px 3px rgba(0,0,0,0.4);
+  }
+  :root[data-theme="light"] {
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --credit:         #e34948;
+    --debit:          #008300;
+    --danger:         #e34948;
+    --card-shadow:    0 1px 2px rgba(11,11,11,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow-x: hidden;
+    max-width: 100%;
+    /* Normal page scroll - only the fold below is height-locked. */
+  }
+  body {
+    /* No padding/flex here - .fold carries the top padding for its own
+       100vh box, .wrap carries the shared horizontal padding for
+       everything (fold and the table section below it alike). */
+  }
+  .wrap {
+    width: 100%;
+    padding: 0 20px;
+  }
+  /* Kiosk "fold": header + KPI row + chart are locked to exactly one
+     viewport height, so they're always fully visible with zero scroll
+     on load. Chart-card is flex:1 so IT absorbs the leftover height
+     after the header/KPI row's natural size - the table section lives
+     entirely outside this box, in normal document flow below it, so
+     reaching it requires a real page scroll (see .activity-card /
+     .table-scroll further down). */
+  .fold {
+    height: 100vh;
+    box-sizing: border-box;
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header.dash-header {
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+  }
+  header.dash-header h1 {
+    font-size: 20px;
+    font-weight: 650;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 14px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    min-width: 0;
+  }
+  @media (max-width: 480px) {
+    .header-meta { flex-direction: column; gap: 2px; }
+  }
+  .header-meta span b {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* KPI cards */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 720px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .kpi-row.balance-row {
+    grid-template-columns: repeat(6, 1fr);
+    flex: 0 0 auto;
+  }
+  @media (max-width: 1300px) {
+    .kpi-row.balance-row { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .kpi-row.balance-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .kpi-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--card-shadow);
+    padding: 10px 12px;
+    border-left: 3px solid var(--baseline);
+  }
+  .kpi-card.credit { border-left-color: var(--credit); }
+  .kpi-card.debit  { border-left-color: var(--debit); }
+  .kpi-label {
+    font-size: 13px;
+    font-weight: 750;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 5px;
+  }
+  .kpi-value {
+    font-size: 17px;
+    font-weight: 650;
+    font-variant-numeric: proportional-nums;
+    white-space: nowrap;
+  }
+  .kpi-sub {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  /* Card container */
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--card-shadow);
+    padding: 12px 12px 6px;
+    margin-bottom: 14px;
+    flex: 0 0 auto;
+  }
+  .card h2 {
+    font-size: 13px;
+    font-weight: 650;
+    margin: 0 0 3px;
+  }
+  .card .card-sub {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  /* Chart card: fills whatever height is left in the 100vh .fold after
+     the header and KPI row take their natural size - flex:1 here is
+     what makes "header + KPI + chart == exactly one viewport" true,
+     now that the table no longer shares this budget. Its own children
+     stack in a column, with chart-scroll as the flexible part that
+     fills whatever height h2/card-sub/legend don't use. */
+  .chart-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 8px;
+    margin-bottom: 0;
+  }
+  .chart-card h2, .chart-card .card-sub, .chart-card .legend {
+    flex: 0 0 auto;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-key { width: 12px; height: 2px; border-radius: 1px; display: inline-block; }
+  .legend-key.credit { background: var(--credit); }
+  .legend-key.debit  { background: var(--debit); }
+
+  /* Chart */
+  .chart-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .chart-wrap { position: relative; height: 100%; }
+  svg.chart { width: 100%; height: 100%; display: block; overflow: visible; }
+  .bar { cursor: pointer; }
+  .bar:hover, .bar.hover { filter: brightness(1.12); }
+  .axis-label {
+    font-size: 9px;
+    fill: var(--text-muted);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .bar-value-label {
+    font-size: 10px;
+    font-weight: 600;
+    fill: var(--text-secondary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    pointer-events: none;
+  }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    padding: 6px 8px;
+    font-size: 11px;
+    color: var(--text-primary);
+    opacity: 0;
+    transform: translate(-50%, -100%);
+    transition: opacity 0.08s ease;
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .t-date { font-weight: 650; margin-bottom: 3px; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
+  .tooltip .t-key { width: 10px; height: 2px; display: inline-block; border-radius: 1px; }
+  .tooltip .t-key.credit { background: var(--credit); }
+  .tooltip .t-key.debit  { background: var(--debit); }
+  .tooltip .t-val { font-weight: 650; margin-left: auto; padding-left: 10px; font-variant-numeric: tabular-nums; }
+  .tooltip .t-label { color: var(--text-secondary); }
+
+  /* Table - lives in normal page flow below the fold (reaching it takes
+     a real scroll), so it just grows to its natural height... up to
+     this cap, past which it scrolls its own rows internally rather than
+     making an already-long page enormous. */
+  .table-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-1);
+    box-shadow: var(--card-shadow);
+    max-height: 60vh;
+  }
+  table.ledger {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 740px;
+    table-layout: fixed;
+  }
+  table.ledger th, table.ledger td {
+    padding: 7px 10px;
+    text-align: left;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+  table.ledger td.desc {
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    color: var(--text-secondary);
+  }
+  table.ledger thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface-1);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--gridline);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    z-index: 1;
+  }
+  table.ledger thead th .arrow { margin-left: 4px; opacity: 0.5; font-size: 9px; }
+  table.ledger thead th.sorted .arrow { opacity: 1; }
+  table.ledger tbody tr { border-bottom: 1px solid var(--gridline); }
+  table.ledger tbody tr:last-child { border-bottom: none; }
+  table.ledger tbody tr:hover { background: color-mix(in srgb, var(--text-primary) 3%, transparent); }
+  table.ledger td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.ledger td.num.credit { color: var(--credit); }
+  table.ledger td.num.debit  { color: var(--debit); }
+  table.ledger td.num.zero   { color: var(--text-muted); }
+  table.ledger td.num.balance-negative { color: var(--danger); font-weight: 650; }
+
+  footer.dash-footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 10.5px;
+    margin-top: 8px;
+    padding-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="fold">
+
+  <header class="dash-header">
+    <h1 id="account-title">Petty Cash</h1>
+    <div class="header-meta">
+      <span>Period: <b id="meta-period">—</b></span>
+      <span>Last updated: <b id="meta-updated">—</b></span>
+      <span>Account ID: <b id="meta-account-id">—</b></span>
+    </div>
+  </header>
+
+  <section class="kpi-row balance-row" id="balance-kpi-row" aria-label="Opening/closing balance">
+    <div class="kpi-card">
+      <div class="kpi-label">Data as of</div>
+      <div class="kpi-value" id="kpi-refreshed">—</div>
+      <div class="kpi-sub">Snapshot date</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Opening balance</div>
+      <div class="kpi-value" id="kpi-opening">—</div>
+      <div class="kpi-sub">Start of period</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Money available</div>
+      <div class="kpi-value" id="kpi-available">—</div>
+      <div class="kpi-sub">Opening + debits</div>
+    </div>
+    <div class="kpi-card credit">
+      <div class="kpi-label">Total expenses</div>
+      <div class="kpi-value" id="kpi-expenses">—</div>
+      <div class="kpi-sub">Total credits</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Closing balance</div>
+      <div class="kpi-value" id="kpi-closing">—</div>
+      <div class="kpi-sub">End of period</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Entries</div>
+      <div class="kpi-value" id="kpi-count">—</div>
+      <div class="kpi-sub">In this period</div>
+    </div>
+  </section>
+
+  <section class="card chart-card">
+    <h2>Daily debit vs credit</h2>
+    <div class="card-sub" id="chart-sub">Summed per calendar day</div>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-key debit"></span>Debit</span>
+      <span class="legend-item"><span class="legend-key credit"></span>Credit</span>
+    </div>
+    <div class="chart-scroll" id="chart-scroll">
+      <div class="chart-wrap" id="chart-wrap">
+        <svg class="chart" id="chart-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+  <section class="card activity-card" style="padding-bottom: 0; margin-top: 20px;">
+    <h2>Activity</h2>
+    <div class="card-sub">Journals, vendor payments, and customer payments. Click a column header to sort. Debit/credit totals are also in the chart above; Balance is the running total after each transaction.</div>
+  </section>
+  <div class="table-scroll" id="table-scroll">
+    <table class="ledger" id="ledger-table">
+      <colgroup>
+        <col style="width: 100px;">
+        <col style="width: 90px;">
+        <col>
+        <col style="width: 110px;">
+        <col style="width: 110px;">
+        <col style="width: 120px;">
+      </colgroup>
+      <thead>
+        <tr>
+          <th data-key="date" data-type="string">Date<span class="arrow">▲</span></th>
+          <th data-key="reference_number" data-type="string">Reference<span class="arrow">▲</span></th>
+          <th data-key="description" data-type="string">Description<span class="arrow">▲</span></th>
+          <th data-key="debit" data-type="number">Debit<span class="arrow">▲</span></th>
+          <th data-key="credit" data-type="number">Credit<span class="arrow">▲</span></th>
+          <th data-key="runningBalance" data-type="number">Balance<span class="arrow">▲</span></th>
+        </tr>
+      </thead>
+      <tbody id="ledger-body"></tbody>
+    </table>
+  </div>
+
+  <footer class="dash-footer">Generated from Zoho ERP journal data · <span id="footer-count">0</span> entries</footer>
+
+</div>
+
+<script type="application/json" id="petty-cash-data">
+{
+  "account_name": "Petty Cash",
+  "account_id": "3545384000000056141",
+  "period": "2026-07-01 to 2026-07-10",
+  "generated_at": "2026-07-11 16:57",
+  "summary_counts": {
+    "journal": 65,
+    "bill_payment": 1
+  },
+  "entries": [
+    {
+      "type": "journal",
+      "date": "2026-07-01",
+      "reference_number": "1439",
+      "description": "MILK4 120, BANANA 10, GOOD DAY BISCUIT 38, THOR 20, MARIE GOLD BISCUIT 48, PEANUT 100, TULSI PATA 5, AMUL GHI  155, CHANACHUR 400G 120.",
+      "debit": 0,
+      "credit": 616.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-02",
+      "reference_number": "1440",
+      "description": "MILK 60, BANANA 20, MANGO2KG 100, GOOD DAY BISCUIT 38,\nTOP BISCUIT 28, EGG 120, CHILI 5, KALO JIRE 10, MURI 35, UCCHE 20, DATES 250G 40, SOSA 10, RICE 1KG 60, JAGGERY 25",
+      "debit": 0,
+      "credit": 571.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-02",
+      "reference_number": "1384",
+      "description": "Payment to Pratim,Petty Cash\nWashroom Renovation \n\nDrum rent 50/- per day  - 50/-\nTransport - 50/-\n\n\nAND HOME GAS CYLINDER PURCHASE",
+      "debit": 0,
+      "credit": 1400.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-03",
+      "reference_number": "1437",
+      "description": "Payment to Srijan ,Petty Cash\nWashroom Renovation \n\n02.07.26\nRental Drum Transport - 50/-",
+      "debit": 0,
+      "credit": 50.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-04",
+      "reference_number": "1484",
+      "description": "MILK1 30, BANANA4 20, LEBU LANKA 20, TOP BISCUIT 28, PEPE 10, KUMRO 25, TOMATO 10, POTATO 23, ONION 20, DHUP 100, MASALA 15, CHANACHUR 120",
+      "debit": 0,
+      "credit": 421.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-04",
+      "reference_number": "1480",
+      "description": "WITHDRAWL AND PETTY CASH ADDED ",
+      "debit": 5000.0,
+      "credit": 0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-06",
+      "reference_number": "1506",
+      "description": "MILK 30, BANANA 10, MANGO1KG500G 110, PIYARA 20, CHANACHUR 120, MARIE GOLD BISCUIT 48, TOP BISCUIT 28",
+      "debit": 0,
+      "credit": 366.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-06",
+      "reference_number": "1485",
+      "description": "SSM BAZAR 290, PARLOUR ITEM  HAIR BAND 200, UPEN 660\n\nPayment to Srijan da UPI\n\n05.07.26\nWashroom Renovation \nBrush - 40/-",
+      "debit": 0,
+      "credit": 1190.0
+    },
+    {
+      "type": "vendor_payment",
+      "date": "2026-07-06",
+      "reference_number": "115",
+      "description": "Vendor payment - Hackwer (Bill #112)",
+      "debit": 0,
+      "credit": 70.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-07",
+      "reference_number": "1507",
+      "description": "MILK 30, BANANA2 10, AMRA 20, UCCHE 20, TOP BISCUIT 28, RIKSHAW VARA 60, XEROX 20, LIGHT 50, BRINGLE 23, POTOL 17",
+      "debit": 0,
+      "credit": 278.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-08",
+      "reference_number": "1509",
+      "description": "milk 30, banana 10, mango 2kg 180, cha pata 42, bekary biscuit 18, jhinga 14",
+      "debit": 0,
+      "credit": 294.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-08",
+      "reference_number": "1514",
+      "description": "MASI HOUSE KEEPING MONTHLY PAYMENT AND RECHARGE",
+      "debit": 0,
+      "credit": 1800.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-09",
+      "reference_number": "1525",
+      "description": "MILK4 120, BANANA 20, TOP BISCUIT 28, TEJ PATA 5, GHUGNI MATAR 9, KACHU SAK 40, MEDICINE 87, BADAM 100, XEROX 2, MARIE GOLD 48, RIKSHAW FARE 20, TICKIT 10, TEA 20",
+      "debit": 0,
+      "credit": 509.0
+    },
+    {
+      "type": "journal",
+      "date": "2026-07-10",
+      "reference_number": "1534",
+      "description": "banana 20, top biscuit 28, biscuit 10, curd 10, coconut 20, carrot 20, tomato 10, misti kumro 9, auto vara 10",
+      "debit": 0,
+      "credit": 137.0
+    }
+  ]
+}
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  // Opening balance carried in from the prior period's closing balance -
+  // not derivable from this JSON (it only covers transactions within the
+  // period), so it's a fixed constant. UPDATE THIS each month to the
+  // previous month's closing balance before regenerating the dashboard.
+  var OPENING_BALANCE = 2886;
+
+  var raw = JSON.parse(document.getElementById("petty-cash-data").textContent);
+  var entries = raw.entries.slice();
+
+  var fmtINR = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
+  function money(n) { return "₹" + fmtINR.format(Math.round(n * 100) / 100); }
+
+  var FULL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function dataAsOf(generatedAt) {
+    if (!generatedAt) return "—";
+    var parts = generatedAt.split(" ")[0].split("-"); // "YYYY-MM-DD HH:MM" -> date part
+    return parseInt(parts[2], 10) + " " + FULL_MONTHS[parseInt(parts[1], 10) - 1];
+  }
+
+  // ---- Header ----
+  document.getElementById("account-title").textContent = raw.account_name;
+  document.getElementById("meta-period").textContent = raw.period;
+  document.getElementById("meta-updated").textContent = raw.generated_at || "—";
+  document.getElementById("meta-account-id").textContent = raw.account_id;
+
+  // ---- KPIs ----
+  var totalDebit = 0, totalCredit = 0;
+  entries.forEach(function (j) {
+    totalDebit += Number(j.debit) || 0;
+    totalCredit += Number(j.credit) || 0;
+  });
+
+  document.getElementById("kpi-count").textContent = entries.length.toLocaleString("en-IN");
+  document.getElementById("footer-count").textContent = entries.length;
+
+  // ---- Opening/closing balance ----
+  // Running total across every entry in chronological order - debits add
+  // (cash in), credits subtract (cash out). Each entry's balance-after is
+  // stamped onto the SAME object referenced by `entries` (not a copy), so
+  // the table's running-balance column stays correct no matter which
+  // column the user later sorts the view by - it's a historical fact per
+  // transaction, not something that should change with the sort order.
+  // A day's last entry's balance is, by construction, the next day's
+  // opening balance - no separate day-level bookkeeping needed.
+  var chronological = entries.slice().sort(function (a, b) {
+    if (a.date < b.date) return -1;
+    if (a.date > b.date) return 1;
+    return 0;
+  });
+  var runningBalance = OPENING_BALANCE;
+  chronological.forEach(function (e) {
+    runningBalance += (Number(e.debit) || 0) - (Number(e.credit) || 0);
+    e.runningBalance = runningBalance;
+  });
+  var closingBalance = runningBalance;
+  var totalAvailable = OPENING_BALANCE + totalDebit;
+
+  document.getElementById("kpi-opening").textContent = money(OPENING_BALANCE);
+  document.getElementById("kpi-available").textContent = money(totalAvailable);
+  document.getElementById("kpi-expenses").textContent = money(totalCredit);
+  document.getElementById("kpi-closing").textContent = money(closingBalance);
+  document.getElementById("kpi-refreshed").textContent = dataAsOf(raw.generated_at);
+
+  // ---- Daily aggregation (fills every calendar day in the period, even empty ones) ----
+  function parseISO(s) {
+    var parts = s.split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  var periodParts = raw.period.split(" to ");
+  var startDate = parseISO(periodParts[0]);
+  var endDate = parseISO(periodParts[1]);
+
+  var byDate = {};
+  entries.forEach(function (j) {
+    if (!byDate[j.date]) byDate[j.date] = { debit: 0, credit: 0 };
+    byDate[j.date].debit += Number(j.debit) || 0;
+    byDate[j.date].credit += Number(j.credit) || 0;
+  });
+
+  var days = [];
+  for (var d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    var iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    var entry = byDate[iso] || { debit: 0, credit: 0 };
+    days.push({ date: iso, day: d.getDate(), debit: entry.debit, credit: entry.credit });
+  }
+
+  // ---- Chart ----
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("chart-svg");
+  var tooltip = document.getElementById("tooltip");
+  var chartWrap = document.getElementById("chart-wrap");
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function shortDate(iso) {
+    var parts = iso.split("-");
+    return parseInt(parts[2], 10) + " " + MONTHS[parseInt(parts[1], 10) - 1];
+  }
+
+  var BASE_W = 800;
+  // The chart card's height is CSS-driven (vh-based, see .chart-card) so
+  // it scales with the viewport - kiosk displays need it to actually fit
+  // the screen at 1366x768 as well as 1920x1080, not just look shorter.
+  // VB_H is measured from the real container each render() rather than
+  // fixed, and the SVG's own pixel height is set to match exactly (1
+  // viewBox unit = 1 CSS px both ways), so nothing stretches or clips.
+  var MIN_VB_H = 140; // floor so a very short viewport never fully collapses the plot
+  // Below this many pixels per day, grouped bars stop being legible. Past the
+  // day count that would violate it at BASE_W, the chart switches from
+  // fluid (100% width, bars compress) to a fixed pixel width that preserves
+  // this minimum and scrolls horizontally instead (see chart-scroll wrapper).
+  var MIN_GROUP_PX = 16;
+  // marginTop is taller than a typical chart margin to leave headroom for
+  // the vertical value label above the tallest bar (see render()) - with
+  // yMax padded 15% over the real max, the tallest bar still falls well
+  // short of marginTop, so its label has room without clipping. Sized for
+  // the 10px label font - bump this further if the label font grows.
+  var marginLeft = 38, marginRight = 10, marginTop = 55, marginBottom = 22;
+  var VB_H, plotH, VB_W, plotW;
+
+  function niceMax(raw) {
+    if (raw <= 0) return 100;
+    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var norm = raw / mag;
+    var step;
+    if (norm <= 1) step = 1;
+    else if (norm <= 2) step = 2;
+    else if (norm <= 5) step = 5;
+    else step = 10;
+    return step * mag;
+  }
+
+  var rawMax = 0;
+  days.forEach(function (dday) { rawMax = Math.max(rawMax, dday.debit, dday.credit); });
+  var yMax = niceMax(rawMax * 1.15 || 100);
+  var tickCount = 4;
+
+  function el(tag, attrs) {
+    var e = document.createElementNS(svgNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function render() {
+    svg.textContent = "";
+    var n = days.length;
+
+    // Match the SVG's pixel height to whatever the flex/vh-based CSS
+    // actually allocated chart-wrap this render - measured live rather
+    // than assumed, so it's correct at any viewport size.
+    VB_H = Math.max(MIN_VB_H, Math.round(chartWrap.clientHeight) || MIN_VB_H);
+    plotH = VB_H - marginTop - marginBottom;
+
+    // Fluid up to BASE_W; beyond the day count where that would squeeze
+    // groups under MIN_GROUP_PX, grow the SVG's own pixel width instead and
+    // let .chart-scroll's overflow-x handle the rest.
+    var wideWidth = n * MIN_GROUP_PX;
+    VB_W = Math.max(BASE_W, wideWidth);
+    plotW = VB_W - marginLeft - marginRight;
+    svg.setAttribute("viewBox", "0 0 " + VB_W + " " + VB_H);
+    svg.setAttribute("height", VB_H);
+    svg.style.width = VB_W > BASE_W ? VB_W + "px" : "";
+    svg.style.height = VB_H + "px";
+
+    var groupW = plotW / n;
+    var barW = Math.min(24, groupW * 0.32);
+    var gap = 2;
+
+    // Gridlines + y ticks
+    for (var t = 0; t <= tickCount; t++) {
+      var val = (yMax / tickCount) * t;
+      var y = marginTop + plotH - (val / yMax) * plotH;
+      svg.appendChild(el("line", {
+        class: t === 0 ? "baseline" : "gridline",
+        x1: marginLeft, x2: VB_W - marginRight, y1: y, y2: y
+      }));
+      var label = el("text", { class: "axis-label", x: marginLeft - 8, y: y + 3, "text-anchor": "end" });
+      label.textContent = val >= 1000 ? (val / 1000) + "k" : String(val);
+      svg.appendChild(label);
+    }
+
+    days.forEach(function (dday, i) {
+      var groupX = marginLeft + i * groupW;
+      var center = groupX + groupW / 2;
+
+      // x-axis label (every day, thin dataset; skip mid labels if too many)
+      var showLabel = n <= 15 || i % Math.ceil(n / 15) === 0;
+      if (showLabel) {
+        var xl = el("text", { class: "axis-label", x: center, y: VB_H - marginBottom + 14, "text-anchor": "middle" });
+        xl.textContent = shortDate(dday.date);
+        svg.appendChild(xl);
+      }
+
+      [{ key: "debit", color: "var(--debit)" }, { key: "credit", color: "var(--credit)" }].forEach(function (series, si) {
+        var val = dday[series.key];
+        var h = (val / yMax) * plotH;
+        var x = center - barW - gap / 2 + si * (barW + gap);
+        var y = marginTop + plotH - h;
+        var rect = el("rect", {
+          class: "bar",
+          x: x, y: h > 0 ? y : marginTop + plotH - 1,
+          width: barW, height: Math.max(h, val > 0 ? 1 : 0),
+          rx: 3, ry: 3,
+          fill: series.color,
+          "data-date": dday.date, "data-day-index": i
+        });
+        rect.addEventListener("pointerenter", function () { showTip(dday, groupX + groupW / 2, y); rect.classList.add("hover"); });
+        rect.addEventListener("pointermove", function () { showTip(dday, groupX + groupW / 2, y); });
+        rect.addEventListener("pointerleave", function () { hideTip(); rect.classList.remove("hover"); });
+        rect.addEventListener("focus", function () { showTip(dday, groupX + groupW / 2, y); });
+        rect.addEventListener("blur", hideTip);
+        rect.setAttribute("tabindex", "0");
+        svg.appendChild(rect);
+
+        // Value label for every non-zero bar, rotated vertical so its
+        // footprint is only ~font-size wide - stays legible without
+        // colliding with the neighboring bar's label even in narrow
+        // groups (dense/many-day charts), instead of a horizontal label
+        // that would be many times wider than the bar itself.
+        if (val > 0) {
+          var labelX = x + barW / 2;
+          var labelY = y - 4;
+          var valueLabel = el("text", {
+            class: "bar-value-label",
+            x: labelX, y: labelY,
+            "text-anchor": "start",
+            transform: "rotate(-90, " + labelX + ", " + labelY + ")"
+          });
+          valueLabel.textContent = money(val);
+          svg.appendChild(valueLabel);
+        }
+      });
+    });
+  }
+
+  function fullDate(iso) {
+    var parts = iso.split("-");
+    return MONTHS[parseInt(parts[1], 10) - 1] + " " + parseInt(parts[2], 10) + ", " + parts[0];
+  }
+
+  function showTip(dday, svgX, svgY) {
+    var pct = { x: svgX / VB_W, y: svgY / VB_H };
+    var rect = svg.getBoundingClientRect();
+    var wrapRect = chartWrap.getBoundingClientRect();
+    var left = rect.left - wrapRect.left + pct.x * rect.width;
+    var top = rect.top - wrapRect.top + pct.y * rect.height;
+
+    tooltip.innerHTML = "";
+    var dateEl = document.createElement("div");
+    dateEl.className = "t-date";
+    dateEl.textContent = fullDate(dday.date);
+    tooltip.appendChild(dateEl);
+
+    [["debit", "Debit", dday.debit], ["credit", "Credit", dday.credit]].forEach(function (row) {
+      var r = document.createElement("div");
+      r.className = "t-row";
+      var key = document.createElement("span");
+      key.className = "t-key " + row[0];
+      var lab = document.createElement("span");
+      lab.className = "t-label";
+      lab.textContent = row[1];
+      var val = document.createElement("span");
+      val.className = "t-val";
+      val.textContent = money(row[2]);
+      r.appendChild(key); r.appendChild(lab); r.appendChild(val);
+      tooltip.appendChild(r);
+    });
+
+    tooltip.style.left = left + "px";
+    tooltip.style.top = (top - 8) + "px";
+    tooltip.classList.add("show");
+  }
+  function hideTip() { tooltip.classList.remove("show"); }
+
+  render();
+  window.addEventListener("resize", render);
+
+  // ---- Table ----
+  // table-scroll's height is flex-constrained by the kiosk layout (see
+  // CSS), not "grow to fit content", so overflow-y:auto is unconditional
+  // now - it only shows a scrollbar when rows actually exceed the space
+  // left after the header/KPI row/chart, regardless of row count.
+  var tbody = document.getElementById("ledger-body");
+  var sortState = { key: "date", dir: 1 };
+
+  function renderTable() {
+    var rows = entries.slice().sort(function (a, b) {
+      var k = sortState.key;
+      var av = a[k], bv = b[k];
+      if (k === "debit" || k === "credit" || k === "runningBalance") { av = Number(av) || 0; bv = Number(bv) || 0; }
+      else { av = String(av).toLowerCase(); bv = String(bv).toLowerCase(); }
+      if (av < bv) return -1 * sortState.dir;
+      if (av > bv) return 1 * sortState.dir;
+      return 0;
+    });
+
+    tbody.textContent = "";
+    rows.forEach(function (j) {
+      var tr = document.createElement("tr");
+
+      var tdDate = document.createElement("td");
+      tdDate.textContent = j.date;
+      tr.appendChild(tdDate);
+
+      var tdRef = document.createElement("td");
+      tdRef.textContent = j.reference_number;
+      tr.appendChild(tdRef);
+
+      var tdDesc = document.createElement("td");
+      tdDesc.className = "desc";
+      tdDesc.textContent = j.description;
+      tr.appendChild(tdDesc);
+
+      var tdDebit = document.createElement("td");
+      tdDebit.className = "num " + (j.debit > 0 ? "debit" : "zero");
+      tdDebit.textContent = j.debit > 0 ? money(j.debit) : "–";
+      tr.appendChild(tdDebit);
+
+      var tdCredit = document.createElement("td");
+      tdCredit.className = "num " + (j.credit > 0 ? "credit" : "zero");
+      tdCredit.textContent = j.credit > 0 ? money(j.credit) : "–";
+      tr.appendChild(tdCredit);
+
+      var tdBalance = document.createElement("td");
+      tdBalance.className = "num" + (j.runningBalance < 0 ? " balance-negative" : "");
+      tdBalance.textContent = money(j.runningBalance);
+      tr.appendChild(tdBalance);
+
+      tbody.appendChild(tr);
+    });
+
+    document.querySelectorAll("#ledger-table thead th").forEach(function (th) {
+      th.classList.toggle("sorted", th.dataset.key === sortState.key);
+      var arrow = th.querySelector(".arrow");
+      if (th.dataset.key === sortState.key) arrow.textContent = sortState.dir === 1 ? "▲" : "▼";
+      else arrow.textContent = "▲";
+    });
+  }
+
+  document.querySelectorAll("#ledger-table thead th").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.dataset.key;
+      if (sortState.key === key) sortState.dir *= -1;
+      else { sortState.key = key; sortState.dir = 1; }
+      renderTable();
+    });
+  });
+
+  renderTable();
+})();
+</script>
+
+</body>
+</html>
