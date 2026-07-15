@@ -109,6 +109,7 @@
     font-weight: 650;
     margin: 0 0 4px;
     letter-spacing: -0.01em;
+    text-align: center;
   }
   .header-meta {
     display: flex;
@@ -151,7 +152,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: var(--card-shadow);
-    padding: 10px 12px;
+    padding: 12px 20px;
     border-left: 3px solid var(--baseline);
   }
   .kpi-card.credit { border-left-color: var(--credit); }
@@ -165,7 +166,7 @@
     margin-bottom: 5px;
   }
   .kpi-value {
-    font-size: 17px;
+    font-size: 19px;
     font-weight: 650;
     font-variant-numeric: proportional-nums;
     white-space: nowrap;
@@ -721,22 +722,28 @@
   var marginLeft = 38, marginRight = 10, marginTop = 55, marginBottom = 22;
   var VB_H, plotH, VB_W, plotW;
 
-  function niceMax(raw) {
-    if (raw <= 0) return 100;
-    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
-    var norm = raw / mag;
-    var step;
-    if (norm <= 1) step = 1;
-    else if (norm <= 2) step = 2;
-    else if (norm <= 5) step = 5;
-    else step = 10;
-    return step * mag;
+  // Picks a "nice" gridline step so tickCount evenly-spaced gridlines land
+  // on round numbers AND the resulting axis max (step * tickCount) sits
+  // just above the padded data max - not the old 1/2/5/10-only step table,
+  // which could only round up to a whole decade (e.g. any padded max from
+  // 5001 to 10000 all snapped to a 10k axis) and wasted most of the chart
+  // on empty space above short bars.
+  var NICE_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  function niceStep(rawStep) {
+    if (rawStep <= 0) return 1;
+    var mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    var norm = rawStep / mag;
+    for (var i = 0; i < NICE_STEPS.length; i++) {
+      if (norm <= NICE_STEPS[i]) return NICE_STEPS[i] * mag;
+    }
+    return 10 * mag;
   }
 
+  var tickCount = 4;
   var rawMax = 0;
   days.forEach(function (dday) { rawMax = Math.max(rawMax, dday.debit, dday.credit); });
-  var yMax = niceMax(rawMax * 1.15 || 100);
-  var tickCount = 4;
+  var step = niceStep((rawMax * 1.15 || 100) / tickCount);
+  var yMax = step * tickCount;
 
   function el(tag, attrs) {
     var e = document.createElementNS(svgNS, tag);
