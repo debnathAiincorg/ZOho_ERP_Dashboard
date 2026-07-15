@@ -152,29 +152,29 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: var(--card-shadow);
-    padding: 12px 20px;
+    padding: 20px 24px;
     border-left: 3px solid var(--baseline);
   }
   .kpi-card.credit { border-left-color: var(--credit); }
   .kpi-card.debit  { border-left-color: var(--debit); }
   .kpi-label {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 750;
     color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 0.02em;
-    margin-bottom: 5px;
+    margin-bottom: 7px;
   }
   .kpi-value {
-    font-size: 19px;
+    font-size: 23px;
     font-weight: 650;
     font-variant-numeric: proportional-nums;
     white-space: nowrap;
   }
   .kpi-sub {
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--text-muted);
-    margin-top: 3px;
+    margin-top: 4px;
   }
 
   /* Card container */
@@ -245,9 +245,17 @@
     fill: var(--text-muted);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
+  /* x-axis day labels (e.g. "1 Jul") get their own, larger size - kept
+     separate from .axis-label (shared with the y-axis ticks) so bumping
+     one doesn't also inflate the other. */
+  .axis-label-x {
+    font-size: 12px;
+    fill: var(--text-muted);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
   .bar-value-label {
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     fill: var(--text-secondary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     pointer-events: none;
@@ -716,7 +724,7 @@
   // VB_H is measured from the real container each render() rather than
   // fixed, and the SVG's own pixel height is set to match exactly (1
   // viewBox unit = 1 CSS px both ways), so nothing stretches or clips.
-  var MIN_VB_H = 140; // floor so a very short viewport never fully collapses the plot
+  var MIN_VB_H = 170; // floor so a very short viewport never fully collapses the plot
   // Below this many pixels per day, grouped bars stop being legible. Past the
   // day count that would violate it at BASE_W, the chart switches from
   // fluid (100% width, bars compress) to a fixed pixel width that preserves
@@ -726,8 +734,9 @@
   // the vertical value label above the tallest bar (see render()) - with
   // yMax padded 15% over the real max, the tallest bar still falls well
   // short of marginTop, so its label has room without clipping. Sized for
-  // the 10px label font - bump this further if the label font grows.
-  var marginLeft = 38, marginRight = 10, marginTop = 55, marginBottom = 22;
+  // the 13px bold label font - bump this further if the label font grows.
+  // marginBottom is sized for the 12px x-axis date-label font (.axis-label-x).
+  var marginLeft = 38, marginRight = 10, marginTop = 78, marginBottom = 30;
   var VB_H, plotH, VB_W, plotW;
 
   // Picks a "nice" gridline step so tickCount evenly-spaced gridlines land
@@ -804,7 +813,7 @@
       // x-axis label (every day, thin dataset; skip mid labels if too many)
       var showLabel = n <= 15 || i % Math.ceil(n / 15) === 0;
       if (showLabel) {
-        var xl = el("text", { class: "axis-label", x: center, y: VB_H - marginBottom + 14, "text-anchor": "middle" });
+        var xl = el("text", { class: "axis-label-x", x: center, y: VB_H - marginBottom + 22, "text-anchor": "middle" });
         xl.textContent = shortDate(dday.date);
         svg.appendChild(xl);
       }
