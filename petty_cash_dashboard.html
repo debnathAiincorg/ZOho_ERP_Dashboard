@@ -454,7 +454,7 @@
   "account_name": "Petty Cash",
   "account_id": "3545384000000056141",
   "period": "2026-07-01 to 2026-07-14",
-  "generated_at": "2026-07-15 05:47",
+  "generated_at": "2026-07-15 12:56",
   "summary_counts": {
     "journal": 71,
     "bill_payment": 1
@@ -683,7 +683,8 @@
   document.getElementById("kpi-closing").textContent = money(closingBalance);
   document.getElementById("kpi-refreshed").textContent = dataAsOf(raw.generated_at);
 
-  // ---- Daily aggregation (fills every calendar day in the period, even empty ones) ----
+  // ---- Daily aggregation (only days with at least one transaction; empty
+  // calendar days are skipped entirely so the chart has no bar-less gaps) ----
   function parseISO(s) {
     var parts = s.split("-").map(Number);
     return new Date(parts[0], parts[1] - 1, parts[2]);
@@ -702,7 +703,8 @@
   var days = [];
   for (var d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
     var iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-    var entry = byDate[iso] || { debit: 0, credit: 0 };
+    var entry = byDate[iso];
+    if (!entry) continue;
     days.push({ date: iso, day: d.getDate(), debit: entry.debit, credit: entry.credit });
   }
 
@@ -793,6 +795,23 @@
     var barW = Math.min(24, groupW * 0.32);
     var gap = 2;
 
+    // How many groups a date label ("17 Jul") needs to skip to avoid
+    // overlapping its neighbor - measured against the actual widest label
+    // in this dataset rather than assumed, so it adapts to both the
+    // current viewport width (via groupW) and label text length (e.g.
+    // multi-month periods with "31 Jul" vs "1 Jul"). Stride 1 (every
+    // label shown) whenever there's room; grows only as needed.
+    var LABEL_GAP_PX = 6;
+    var measureLabel = el("text", { class: "axis-label-x" });
+    svg.appendChild(measureLabel);
+    var maxLabelW = 0;
+    days.forEach(function (dday) {
+      measureLabel.textContent = shortDate(dday.date);
+      maxLabelW = Math.max(maxLabelW, measureLabel.getComputedTextLength());
+    });
+    svg.removeChild(measureLabel);
+    var labelStride = Math.max(1, Math.ceil((maxLabelW + LABEL_GAP_PX) / groupW));
+
     // Gridlines + y ticks
     for (var t = 0; t <= tickCount; t++) {
       var val = (yMax / tickCount) * t;
@@ -810,8 +829,9 @@
       var groupX = marginLeft + i * groupW;
       var center = groupX + groupW / 2;
 
-      // x-axis label (every day, thin dataset; skip mid labels if too many)
-      var showLabel = n <= 15 || i % Math.ceil(n / 15) === 0;
+      // x-axis label - every remaining day when it fits, thinned by
+      // labelStride (computed above from available width) when it doesn't.
+      var showLabel = i % labelStride === 0;
       if (showLabel) {
         var xl = el("text", { class: "axis-label-x", x: center, y: VB_H - marginBottom + 22, "text-anchor": "middle" });
         xl.textContent = shortDate(dday.date);
@@ -908,7 +928,7 @@
   // now - it only shows a scrollbar when rows actually exceed the space
   // left after the header/KPI row/chart, regardless of row count.
   var tbody = document.getElementById("ledger-body");
-  var sortState = { key: "date", dir: 1 };
+  var sortState = { key: "date", dir: -1 }; // default newest-first
 
   function renderTable() {
     var rows = entries.slice().sort(function (a, b) {
